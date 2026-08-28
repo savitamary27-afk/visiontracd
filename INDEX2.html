@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRACEBACK — Find Someone</title>
+<link rel="preconnect" href="https://fonts.googleapisS.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+  :root{
+    --bg:#000;
+    --panel:#141414;
+    --panel2:#1f1f1f;
+    --border:#2b2b2b;
+    --red:#E50914;
+    --green:#3ec46d;
+    --white:#F5F5F1;
+    --muted:#8c8c8c;
+    --display:'Bebas Neue', sans-serif;
+    --body:'Inter', sans-serif;
+    --mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{ height:100%; background:var(--bg); overflow:hidden; }
+  body{ color:var(--white); font-family:var(--body); }
+  ::selection{ background:var(--red); color:#fff; }
+  button, input{ font-family:inherit; }
+
+  .app{ position:relative; width:100%; height:100vh; overflow:hidden; }
+  .app::before{
+    content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background: radial-gradient(ellipse at 50% -10%, rgba(229,9,20,0.14), transparent 55%),
+                radial-gradient(ellipse at 50% 110%, rgba(229,9,20,0.08), transparent 55%);
+  }
+
+  .minibar{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 26px; font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.05em;
+  }
+  .minibar .logo{ font-family:var(--display); font-size:20px; letter-spacing:0.06em; color:var(--white); }
+  .minibar .logo span{ color:var(--red); }
+
+  .screen{
+    position:absolute; inset:0; z-index:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    opacity:0; transform:translateY(100%);
+    transition: transform 0.85s cubic-bezier(.65,0,.3,1), opacity 0.7s ease;
+    pointer-events:none;
+    padding:90px 24px 40px;
+    overflow-y:auto;
+  }
+  .screen.active{ opacity:1; transform:translateY(0); pointer-events:auto; z-index:3; }
+  .screen.prev{ opacity:0; transform:translateY(-100%); z-index:2; pointer-events:none; }
+
+  /* ================= SCREEN 1 — HERO ================= */
+  .hero-content{ max-width:640px; width:100%; text-align:center; }
+  .hero-title{ font-family:var(--display); font-size:56px; line-height:1.05; letter-spacing:0.01em; text-transform:uppercase; margin-bottom:14px; }
+  .hero-title .accent{ color:var(--red); }
+  .hero-sub{ color:var(--muted); font-size:15px; margin-bottom:32px; line-height:1.5; }
+
+  .tab-bar{ display:inline-flex; border:1px solid var(--border); border-radius:999px; padding:4px; margin-bottom:20px; background:var(--panel); }
+  .tab-btn{ border:none; background:transparent; color:var(--muted); padding:8px 22px; border-radius:999px; font-family:var(--mono); font-size:11.5px; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:all .2s; }
+  .tab-btn.active{ background:var(--red); color:#fff; }
+
+  .dropzone{ position:relative; border:1.5px dashed var(--border); border-radius:10px; padding:34px 20px; cursor:pointer; transition:border-color .2s, background .2s; margin-bottom:8px; }
+  .dropzone:hover, .dropzone.drag{ border-color:var(--red); background:rgba(229,9,20,0.05); }
+  .dropzone .dz-icon{ font-size:26px; color:var(--muted); margin-bottom:8px; }
+  .dropzone .dz-text{ font-size:13.5px; color:var(--muted); }
+  .dropzone .dz-text b{ color:var(--white); }
+  .dropzone input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+
+  .ref-status{ font-family:var(--mono); font-size:11.5px; margin-top:10px; padding:9px 12px; border-radius:6px; text-align:left; }
+  .ref-status.wait{ background:var(--panel); color:var(--muted); border:1px solid var(--border); }
+  .ref-status.ok{ background:rgba(76,175,90,0.08); color:#7ed08c; border:1px solid rgba(76,175,90,0.25); }
+  .ref-status.err{ background:rgba(229,9,20,0.08); color:#ff6b6b; border:1px solid rgba(229,9,20,0.3); }
+
+  .ref-preview-wrap{ display:none; margin-top:14px; }
+  .ref-preview-wrap canvas{ max-width:220px; width:100%; border-radius:8px; border:1px solid var(--border); }
+
+  .candidate-zone{ display:none; margin-top:34px; text-align:left; border-top:1px solid var(--border); padding-top:26px; }
+  .candidate-zone h3{ font-family:var(--display); font-size:20px; letter-spacing:0.03em; margin-bottom:4px; text-align:center; }
+  .candidate-zone .cz-sub{ color:var(--muted); font-size:12.5px; text-align:center; margin-bottom:16px; }
+  .candidate-count{ font-family:var(--mono); font-size:11.5px; color:var(--red); text-align:center; margin-top:8px; min-height:16px; }
+
+  .cta-btn{ width:100%; margin-top:20px; padding:14px; border:none; border-radius:6px; background:var(--red); color:#fff; font-family:var(--mono); font-size:13px; letter-spacing:0.08em; text-transform:uppercase; font-weight:600; cursor:pointer; transition:background .15s, opacity .15s; }
+  .cta-btn:hover{ background:#ff1a25; }
+  .cta-btn:disabled{ background:var(--panel2); color:var(--muted); cursor:not-allowed; }
+
+  .advisory-mini{ font-family:var(--mono); font-size:9.5px; color:#5a5a5a; text-align:center; margin-top:22px; letter-spacing:0.02em; line-height:1.5; }
+
+  /* ================= SCREEN 2 — SCANNING ================= */
+  .scan-content{ text-align:center; max-width:480px; }
+  .radar{ width:150px; height:150px; border-radius:50%; margin:0 auto 34px; border:1.5px solid var(--border); position:relative; overflow:hidden; background: radial-gradient(circle, rgba(229,9,20,0.08), transparent 70%); }
+  .radar::before{ content:''; position:absolute; inset:0; border-radius:50%; background: conic-gradient(from 0deg, rgba(229,9,20,0.85), transparent 35%); animation: spin 1.6s linear infinite; }
+  .radar::after{ content:''; position:absolute; inset:14px; border-radius:50%; background:var(--bg); border:1px solid var(--border); }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .scan-status-text{ font-family:var(--display); font-size:24px; letter-spacing:0.03em; margin-bottom:22px; min-height:30px; text-transform:uppercase; }
+  .scan-progress-track{ width:100%; height:4px; background:var(--panel2); border-radius:4px; overflow:hidden; margin-bottom:10px; }
+  .scan-progress-fill{ height:100%; width:0%; background:var(--red); transition:width .25s ease; }
+  .scan-note{ font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+
+  /* ================= SCREEN 3 — RESULTS ================= */
+  #screen-results{ align-items:center; justify-content:flex-start; padding-top:100px; }
+  .results-wrap{ width:100%; max-width:760px; margin:0 auto; text-align:center; }
+
+  .stats-bar{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:34px; max-width:360px; margin-left:auto; margin-right:auto; }
+  .stat{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; }
+  .stat .num{ font-family:var(--display); font-size:30px; color:var(--red); }
+  .stat .lbl{ font-family:var(--mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }
+
+  .verdict{ font-family:var(--display); font-size:38px; letter-spacing:0.02em; text-transform:uppercase; margin-bottom:6px; }
+  .verdict.found{ color:var(--green); }
+  .verdict.notfound{ color:var(--muted); }
+  .verdict-sub{ font-family:var(--mono); font-size:12px; color:var(--muted); margin-bottom:30px; }
+  .verdict-sub b{ color:var(--white); }
+
+  .compare-row{ display:flex; align-items:center; justify-content:center; gap:0; flex-wrap:wrap; margin-bottom:14px; }
+  .compare-panel{ width:230px; }
+  .compare-panel canvas{ width:100%; border-radius:10px; display:block; border:2px solid var(--border); }
+  .compare-panel.match canvas{ border-color:var(--green); }
+  .compare-label{ font-family:var(--mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:8px; }
+
+  .compare-link{ width:110px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 6px; }
+  .compare-link .line{ width:100%; height:1.5px; background:linear-gradient(90deg, var(--border), var(--green), var(--border)); margin-bottom:8px; }
+  .compare-link .pct{ font-family:var(--display); font-size:30px; color:var(--green); line-height:1; }
+  .compare-link .pct-lbl{ font-family:var(--mono); font-size:9.5px; color:var(--muted); text-transform:uppercase; margin-top:2px; }
+
+  @media (max-width:640px){
+    .compare-row{ flex-direction:column; }
+    .compare-link{ width:100%; padding:14px 0; }
+    .compare-link .line{ width:60px; height:60px; background:none; border-right:1.5px dashed var(--border); margin:0 0 8px; }
+    .hero-title{ font-size:40px; }
+  }
+
+  .match-meta{ font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-bottom:30px; }
+  .match-meta b{ color:var(--white); }
+
+  .ghost-btn{ font-family:var(--mono); font-size:11px; letter-spacing:0.05em; text-transform:uppercase; padding:10px 20px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--white); cursor:pointer; transition:border-color .15s; }
+  .ghost-btn:hover{ border-color:var(--red); color:var(--red); }
+
+  .empty-state{ border:1.5px dashed var(--border); border-radius:9px; padding:50px 20px; text-align:center; color:var(--muted); max-width:420px; margin:0 auto 24px; }
+  .empty-state .big{ font-family:var(--display); font-size:20px; color:var(--white); margin-bottom:6px; }
+  .empty-state p{ font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="minibar">
+    <div class="logo">TRACE<span>BACK</span></div>
+    <div class="case" id="model-status">Loading models…</div>
+  </div>
+
+  <!-- ============ SCREEN 1: HERO ============ -->
+  <section class="screen active" id="screen-hero">
+    <div class="hero-content">
+      <h1 class="hero-title">Do you want to<br>find <span class="accent">someone?</span></h1>
+      <p class="hero-sub">Upload a photo or video of the missing person. We'll scan camera footage and check for a match.</p>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" data-type="image">Image</button>
+        <button class="tab-btn" data-type="video">Video</button>
+      </div>
+
+      <div class="dropzone" id="ref-dropzone">
+        <div class="dz-icon">＋</div>
+        <div class="dz-text"><b>Upload</b> a reference photo</div>
+        <input type="file" id="ref-input" accept="image/*">
+      </div>
+      <div class="ref-status wait" id="ref-status">Waiting for models to load…</div>
+      <div class="ref-preview-wrap" id="ref-preview-wrap"><canvas id="ref-canvas"></canvas></div>
+
+      <div class="candidate-zone" id="candidate-zone">
+        <h3>Add footage to scan</h3>
+        <div class="cz-sub">Upload CCTV images or video clips — the more, the better.</div>
+        <div class="dropzone" id="frames-dropzone">
+          <div class="dz-icon">▦</div>
+          <div class="dz-text"><b>Upload</b> images or video files (multiple allowed)</div>
+          <input type="file" id="frames-input" accept="image/*,video/*" multiple>
+        </div>
+        <div class="candidate-count" id="candidate-count"></div>
+        <button class="cta-btn" id="start-scan-btn" disabled>Start Scan</button>
+      </div>
+
+      <div class="advisory-mini">AUTHORIZED PERSONNEL ONLY · DEMO BUILD — runs entirely in your browser, no data leaves this device.</div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2: SCANNING ============ -->
+  <section class="screen" id="screen-scan">
+    <div class="scan-content">
+      <div class="radar"></div>
+      <div class="scan-status-text" id="scan-status-text">Extracting facial features</div>
+      <div class="scan-progress-track"><div class="scan-progress-fill" id="scan-fill"></div></div>
+      <div class="scan-note" id="scan-note">Frame 0 / 0</div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 3: RESULTS ============ -->
+  <section class="screen" id="screen-results">
+    <div class="results-wrap">
+      <div class="stats-bar">
+        <div class="stat"><div class="num" id="stat-frames">0</div><div class="lbl">Frames Scanned</div></div>
+        <div class="stat"><div class="num" id="stat-faces">0</div><div class="lbl">Faces Detected</div></div>
+      </div>
+
+      <div id="results-area"></div>
+
+      <button class="ghost-btn" id="new-search-btn">New Search</button>
+    </div>
+  </section>
+</div>
+
+<script>
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+
+const CAMERAS = [
+  { id:'CAM-04', name:'Metro Station — Platform 2' },
+  { id:'CAM-11', name:'Central Bus Terminal — Gate B' },
+  { id:'CAM-07', name:'Market Road Junction' },
+  { id:'CAM-19', name:'Highway Overpass — NH8' },
+  { id:'CAM-02', name:'Railway Station — Platform 3' },
+  { id:'CAM-15', name:'City Mall — Main Entrance' },
+];
+
+let referenceDescriptor = null;
+let referenceCanvasSrc = null; // dataURL of reference image w/ box, for comparison view
+let candidateItems = [];
+let detections = [];
+let frameCount = 0;
+let refInputType = 'image';
+const MATCH_THRESHOLD = 55; // fixed threshold for "found" verdict
+
+const els = {
+  modelStatus: document.getElementById('model-status'),
+  refDropzone: document.getElementById('ref-dropzone'),
+  refInput: document.getElementById('ref-input'),
+  refStatus: document.getElementById('ref-status'),
+  refPreviewWrap: document.getElementById('ref-preview-wrap'),
+  refCanvas: document.getElementById('ref-canvas'),
+  candidateZone: document.getElementById('candidate-zone'),
+  framesDropzone: document.getElementById('frames-dropzone'),
+  framesInput: document.getElementById('frames-input'),
+  candidateCount: document.getElementById('candidate-count'),
+  startScanBtn: document.getElementById('start-scan-btn'),
+  scanStatusText: document.getElementById('scan-status-text'),
+  scanFill: document.getElementById('scan-fill'),
+  scanNote: document.getElementById('scan-note'),
+  resultsArea: document.getElementById('results-area'),
+  statFrames: document.getElementById('stat-frames'),
+  statFaces: document.getElementById('stat-faces'),
+  newSearchBtn: document.getElementById('new-search-btn'),
+};
+
+function goTo(id){
+  const current = document.querySelector('.screen.active');
+  const next = document.getElementById(id);
+  if(current === next) return;
+  if(current){ current.classList.remove('active'); current.classList.add('prev'); }
+  requestAnimationFrame(()=>{
+    next.classList.remove('prev');
+    requestAnimationFrame(()=> next.classList.add('active'));
+  });
+  setTimeout(()=>{ if(current) current.classList.remove('prev'); }, 900);
+}
+
+async function loadModels(){
+  try{
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    els.modelStatus.textContent = 'Models Ready';
+    setRefStatus('wait', 'Upload a reference photo to begin.');
+  }catch(e){
+    console.error(e);
+    els.modelStatus.textContent = 'Model Load Failed';
+    setRefStatus('err', 'Could not load face-detection models. Check your connection and reload.');
+  }
+}
+window.addEventListener('load', loadModels);
+
+function setRefStatus(kind, text){
+  els.refStatus.className = 'ref-status ' + kind;
+  els.refStatus.textContent = text;
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=> b.classList.remove('active'));
+    btn.classList.add('active');
+    refInputType = btn.dataset.type;
+    els.refInput.setAttribute('accept', refInputType === 'video' ? 'video/*' : 'image/*');
+    els.refDropzone.querySelector('.dz-text').innerHTML = refInputType === 'video'
+      ? '<b>Upload</b> a short video clip'
+      : '<b>Upload</b> a reference photo';
+  });
+});
+
+function fileToImage(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=> resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+function seekTo(video, t){
+  return new Promise(resolve=>{
+    function onSeeked(){ video.removeEventListener('seeked', onSeeked); resolve(); }
+    video.addEventListener('seeked', onSeeked);
+    video.currentTime = t;
+  });
+}
+async function extractFramesFromVideo(file, maxFrames=6){
+  return new Promise((resolve, reject)=>{
+    const video = document.createElement('video');
+    video.preload = 'auto'; video.muted = true; video.playsInline = true;
+    video.src = URL.createObjectURL(file);
+    video.addEventListener('loadedmetadata', async ()=>{
+      try{
+        const duration = video.duration || 1;
+        const count = Math.min(maxFrames, Math.max(1, Math.round(duration)));
+        const interval = duration / (count + 1);
+        const frames = [];
+        for(let i=1;i<=count;i++){
+          await seekTo(video, interval * i);
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          canvas.getContext('2d').drawImage(video, 0, 0);
+          const img = new Image();
+          await new Promise(res=>{ img.onload = res; img.src = canvas.toDataURL('image/jpeg', 0.85); });
+          frames.push(img);
+        }
+        resolve(frames);
+      }catch(err){ reject(err); }
+    });
+    video.addEventListener('error', reject);
+  });
+}
+function drawToCanvas(canvas, img, maxW=480){
+  const scale = Math.min(1, maxW / img.width);
+  canvas.width = img.width * scale;
+  canvas.height = img.height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return { ctx, scale };
+}
+function randomCamera(){ return CAMERAS[Math.floor(Math.random()*CAMERAS.length)]; }
+function randomTimestamp(){
+  const offsetMs = Math.floor(Math.random() * 48 * 60 * 60 * 1000);
+  return new Date(Date.now() - offsetMs);
+}
+function fmtTime(d){ return d.toLocaleString(undefined, { month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
+function scoreFromDistance(dist){
+  const sim = Math.max(0, (1 - dist/0.75)) * 100;
+  return Math.min(100, Math.round(sim*10)/10);
+}
+
+els.refDropzone.addEventListener('click', ()=> els.refInput.click());
+['dragover'].forEach(evt=> els.refDropzone.addEventListener(evt, e=>{ e.preventDefault(); els.refDropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt=> els.refDropzone.addEventListener(evt, ()=> els.refDropzone.classList.remove('drag')));
+els.refInput.addEventListener('change', e=>{ const f=e.target.files[0]; if(f) handleRefFile(f); });
+
+async function handleRefFile(file){
+  if(!faceapi.nets.tinyFaceDetector.params){
+    setRefStatus('err', 'Models still loading — try again in a moment.');
+    return;
+  }
+  setRefStatus('wait', 'Detecting face…');
+  try{
+    if(file.type.startsWith('video')){
+      const frames = await extractFramesFromVideo(file, 5);
+      let found = null;
+      for(const f of frames){
+        const r = await faceapi.detectSingleFace(f, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+        if(r){ found = { img:f, result:r }; break; }
+      }
+      if(!found){ setRefStatus('err', 'No clear face found in that clip. Try a different video.'); return; }
+      finalizeRef(found.img, found.result);
+    } else {
+      const img = await fileToImage(file);
+      const result = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+      if(!result){ setRefStatus('err', 'No face detected. Try a clearer, front-facing photo.'); return; }
+      finalizeRef(img, result);
+    }
+  }catch(err){
+    console.error(err);
+    setRefStatus('err', 'Error processing this file.');
+  }
+}
+
+function finalizeRef(img, result){
+  els.refPreviewWrap.style.display = 'block';
+  const { ctx, scale } = drawToCanvas(els.refCanvas, img, 220);
+  referenceDescriptor = result.descriptor;
+  const box = result.detection.box;
+  ctx.strokeStyle = '#E50914'; ctx.lineWidth = 2;
+  ctx.strokeRect(box.x*scale, box.y*scale, box.width*scale, box.height*scale);
+  referenceCanvasSrc = els.refCanvas.toDataURL('image/jpeg', 0.9);
+  setRefStatus('ok', '✓ Reference face captured.');
+  els.candidateZone.style.display = 'block';
+  checkStartEnabled();
+}
+
+els.framesDropzone.addEventListener('click', ()=> els.framesInput.click());
+els.framesInput.addEventListener('change', e=>{
+  const files = Array.from(e.target.files || []);
+  files.forEach(f=> candidateItems.push({ file:f, type: f.type.startsWith('video') ? 'video' : 'image' }));
+  els.candidateCount.textContent = candidateItems.length
+    ? `${candidateItems.length} file${candidateItems.length>1?'s':''} added`
+    : '';
+  checkStartEnabled();
+});
+
+function checkStartEnabled(){
+  els.startScanBtn.disabled = !(referenceDescriptor && candidateItems.length > 0);
+}
+
+els.startScanBtn.addEventListener('click', runScan);
+
+async function runScan(){
+  goTo('screen-scan');
+  const texts = ['Extracting facial features', 'Comparing embeddings', 'Cross-referencing camera feeds', 'Ranking candidate matches'];
+  let ti = 0;
+  els.scanStatusText.textContent = texts[0];
+  const cycle = setInterval(()=>{ ti++; els.scanStatusText.textContent = texts[ti % texts.length]; }, 900);
+
+  detections = []; frameCount = 0;
+  const startTime = Date.now();
+
+  const allFrames = [];
+  for(const item of candidateItems){
+    if(item.type === 'video'){
+      try{
+        const frames = await extractFramesFromVideo(item.file, 6);
+        frames.forEach((img, idx)=> allFrames.push({ img, fileName: item.file.name + ' #' + (idx+1) }));
+      }catch(e){ console.error('video extract failed', e); }
+    } else {
+      try{
+        const img = await fileToImage(item.file);
+        allFrames.push({ img, fileName: item.file.name });
+      }catch(e){ console.error('image load failed', e); }
+    }
+  }
+
+  const total = Math.max(1, allFrames.length);
+  for(let i=0;i<allFrames.length;i++){
+    frameCount++;
+    const { img, fileName } = allFrames[i];
+    els.scanNote.textContent = `Frame ${i+1} / ${allFrames.length}`;
+    els.scanFill.style.width = Math.round(((i+1)/total)*100) + '%';
+    try{
+      const results = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+      if(results.length === 0) continue;
+
+      let best = null, bestScore = -1;
+      for(const r of results){
+        const dist = faceapi.euclideanDistance(referenceDescriptor, r.descriptor);
+        const score = scoreFromDistance(dist);
+        if(score > bestScore){ bestScore = score; best = r; }
+      }
+      const cam = randomCamera();
+      const ts = randomTimestamp();
+      const canvas = document.createElement('canvas');
+      const { ctx, scale } = drawToCanvas(canvas, img, 460);
+      const box = best.detection.box;
+      ctx.strokeStyle = bestScore >= MATCH_THRESHOLD ? '#3ec46d' : '#666';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(box.x*scale, box.y*scale, box.width*scale, box.height*scale);
+
+      detections.push({ canvas, score: bestScore, camera: cam, timestamp: ts, facesInFrame: results.length, fileName });
+    }catch(err){ console.error('detect error', fileName, err); }
+  }
+
+  const elapsed = Date.now() - startTime;
+  const minDisplay = 2200;
+  if(elapsed < minDisplay) await new Promise(r=> setTimeout(r, minDisplay - elapsed));
+
+  clearInterval(cycle);
+  renderResults();
+  goTo('screen-results');
+}
+
+function renderResults(){
+  els.statFrames.textContent = frameCount;
+  els.statFaces.textContent = detections.reduce((s,d)=> s + d.facesInFrame, 0);
+
+  els.resultsArea.innerHTML = '';
+
+  if(detections.length === 0){
+    els.resultsArea.innerHTML = `<div class="empty-state">
+        <div class="big">No face detected</div>
+        <p>No matching face was found in the scanned footage. Try uploading clearer or additional frames.</p>
+      </div>`;
+    return;
+  }
+
+  const sorted = detections.slice().sort((a,b)=> b.score - a.score);
+  const best = sorted[0];
+  const isMatch = best.score >= MATCH_THRESHOLD;
+  const matchedCount = detections.filter(d=> d.score >= MATCH_THRESHOLD).length;
+  const totalScanned = frameCount;
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="verdict ${isMatch ? 'found' : 'notfound'}">${isMatch ? 'We Found The Person' : 'No Confident Match'}</div>
+    <div class="verdict-sub">${isMatch
+      ? `<b>${matchedCount}</b> of <b>${totalScanned}</b> frame${totalScanned===1?'':'s'} scanned looked alike — best one shown below`
+      : `<b>${matchedCount}</b> of <b>${totalScanned}</b> frame${totalScanned===1?'':'s'} matched — closest result shown below`}</div>
+    <div class="compare-row">
+      <div class="compare-panel">
+        <canvas id="cmp-ref"></canvas>
+        <div class="compare-label">Missing Person</div>
+      </div>
+      <div class="compare-link">
+        <div class="line"></div>
+        <div class="pct">${best.score.toFixed(0)}%</div>
+        <div class="pct-lbl">Similarity</div>
+      </div>
+      <div class="compare-panel ${isMatch ? 'match' : ''}">
+        <canvas id="cmp-match"></canvas>
+        <div class="compare-label">${best.camera.id} · ${best.camera.name}</div>
+      </div>
+    </div>
+    <div class="match-meta">Captured <b>${fmtTime(best.timestamp)}</b> · Source: <b>${best.fileName}</b></div>
+  `;
+  els.resultsArea.appendChild(wrap);
+
+  const refImg = new Image();
+  refImg.onload = ()=> drawToCanvas(document.getElementById('cmp-ref'), refImg, 230);
+  refImg.src = referenceCanvasSrc;
+
+  const matchCanvas = document.getElementById('cmp-match');
+  matchCanvas.width = best.canvas.width;
+  matchCanvas.height = best.canvas.height;
+  matchCanvas.getContext('2d').drawImage(best.canvas, 0, 0);
+}
+
+els.newSearchBtn.addEventListener('click', ()=>{
+  referenceDescriptor = null;
+  referenceCanvasSrc = null;
+  candidateItems = [];
+  detections = [];
+  frameCount = 0;
+  els.refInput.value = '';
+  els.framesInput.value = '';
+  els.refPreviewWrap.style.display = 'none';
+  els.candidateZone.style.display = 'none';
+  els.candidateCount.textContent = '';
+  els.startScanBtn.disabled = true;
+  setRefStatus('wait', 'Upload a reference photo to begin.');
+  goTo('screen-hero');
+});
+</script>
+</body>
+</html>
